@@ -23,6 +23,19 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  async function _fetchUser(s: Session) {
+    try {
+      const account = await getAccount(s);
+      setUser({
+        userId: account.user?.id || "",
+        username: account.user?.username || "",
+        email: account.email,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   // Restore session on mount
   useEffect(() => {
     (async () => {
@@ -45,19 +58,6 @@ export function useAuth() {
       setLoading(false);
     })();
   }, []);
-
-  async function _fetchUser(s: Session) {
-    try {
-      const account = await getAccount(s);
-      setUser({
-        userId: account.user?.id || "",
-        username: account.user?.username || "",
-        email: account.email,
-      });
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
 
   const login = useCallback(async (email: string, password: string) => {
     setError(null);

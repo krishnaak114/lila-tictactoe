@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Session, Socket } from "@heroiclabs/nakama-js";
 import {
   createSocket,
@@ -27,7 +27,8 @@ export function useGame(session: Session | null) {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [gameOver, setGameOver] = useState<GameOverPayload | null>(null);
   const [matchId, setMatchId] = useState<string | null>(null);
-  const [mySessionId, setMySessionId] = useState<string | null>(null);
+  // Derived — not stored as state to avoid setState-in-effect lint errors
+  // mySessionId is set below via useMemo
   const [matchmakerTicket, setMatchmakerTicket] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [privateRoomId, setPrivateRoomId] = useState<string | null>(null);
@@ -37,8 +38,18 @@ export function useGame(session: Session | null) {
   // without adding gameState/mySessionId to the socket useEffect deps.
   const latestGameStateRef = useRef<GameState | null>(null);
   const latestMySessionIdRef = useRef<string | null>(null);
-  latestGameStateRef.current = gameState;
-  latestMySessionIdRef.current = mySessionId;
+  useEffect(() => { latestGameStateRef.current = gameState; }, [gameState]);
+  // Derive own session ID from game state: find the session whose username matches ours
+  const mySessionId = useMemo(() => {
+    if (!gameState || !session) return null;
+    const entries = Object.entries(gameState.playerUsernames);
+    for (const [sid, uname] of entries) {
+      if (uname === session.username) return sid;
+    }
+    return null;
+  }, [gameState, session]);
+
+  useEffect(() => { latestMySessionIdRef.current = mySessionId; }, [mySessionId]);
 
   // ── Setup socket ────────────────────────────────────────────
   useEffect(() => {
@@ -132,18 +143,6 @@ export function useGame(session: Session | null) {
       socketRef.current = null;
     };
   }, [session]);
-
-  // Capture own session ID from match state when we recognize our username
-  useEffect(() => {
-    if (!gameState || !session || mySessionId) return;
-    const entries = Object.entries(gameState.playerUsernames);
-    for (const [sid, uname] of entries) {
-      if (uname === session.username) {
-        setMySessionId(sid);
-        break;
-      }
-    }
-  }, [gameState, session, mySessionId]);
 
   // ── Actions ─────────────────────────────────────────────────
 
