@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Session, Socket } from "@heroiclabs/nakama-js";
 import {
   createSocket,
-  rpcFindMatch,
-  rpcLeaveMatchmaker,
   rpcCreatePrivateRoom,
 } from "@/lib/nakama";
 import {
@@ -157,7 +155,16 @@ export function useGame(session: Session | null) {
     setGameState(null);
 
     try {
-      const result = await rpcFindMatch(session, mode);
+      // Use the Nakama socket matchmaker directly — nk.matchmakerAdd is
+      // not available in the JS server runtime; the server-side
+      // matchmakerMatched hook will auto-create the authoritative match.
+      const result = await socketRef.current.addMatchmaker(
+        `+properties.mode:${mode}`,
+        2,
+        2,
+        { mode },
+        {}
+      );
       setMatchmakerTicket(result.ticket);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Matchmaking error");
@@ -166,13 +173,13 @@ export function useGame(session: Session | null) {
   }, [session]);
 
   const cancelMatchmaking = useCallback(async () => {
-    if (!session || !matchmakerTicket) return;
+    if (!socketRef.current || !matchmakerTicket) return;
     try {
-      await rpcLeaveMatchmaker(session, matchmakerTicket);
+      await socketRef.current.removeMatchmaker(matchmakerTicket);
     } catch { /* ignore — best effort cancel */ }
     setMatchmakerTicket(null);
     setStatus("idle");
-  }, [session, matchmakerTicket]);
+  }, [matchmakerTicket]);
 
   const createPrivateRoom = useCallback(async (mode: GameMode) => {
     if (!session || !socketRef.current) return;

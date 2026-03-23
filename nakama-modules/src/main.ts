@@ -473,8 +473,9 @@ function _updatePlayerStats(
 
 /**
  * RPC: rpc_find_match
- * Adds the caller to the matchmaker pool and returns a ticket.
- * Payload: { mode: "classic" | "timed" }
+ * DEPRECATED — matchmakerAdd is not available in the Nakama JS runtime.
+ * Matchmaking is handled client-side via socket.addMatchmaker().
+ * The server-side matchmakerMatched hook creates the authoritative match.
  */
 function rpcFindMatch(
   ctx: nkruntime.Context,
@@ -482,30 +483,14 @@ function rpcFindMatch(
   nk: nkruntime.Nakama,
   payload: string
 ): string {
-  let mode = "classic";
-  try {
-    const data = JSON.parse(payload || "{}");
-    if (data.mode === "timed") mode = "timed";
-  } catch (_) {}
-
-  const ticket = nk.matchmakerAdd(
-    ctx,
-    2,    // min players
-    2,    // max players
-    `+properties.mode:${mode}`,
-    { mode },
-    {},   // numeric props
-    { mode } // string props
-  );
-
-  logger.info("Player %s added to matchmaker  -  mode: %s, ticket: %s", ctx.username, mode, ticket);
-  return JSON.stringify({ ticket, mode });
+  logger.warn("rpc_find_match called but matchmaking must be done via socket.addMatchmaker() on the client");
+  return JSON.stringify({ error: "Use socket.addMatchmaker() for matchmaking" });
 }
 
 /**
  * RPC: rpc_leave_matchmaker
- * Removes the caller from the matchmaker pool.
- * Payload: { ticket: string }
+ * DEPRECATED — matchmakerRemove is not available in the Nakama JS runtime.
+ * Use socket.removeMatchmaker() from the client instead.
  */
 function rpcLeaveMatchmaker(
   ctx: nkruntime.Context,
@@ -513,13 +498,8 @@ function rpcLeaveMatchmaker(
   nk: nkruntime.Nakama,
   payload: string
 ): string {
-  try {
-    const data = JSON.parse(payload || "{}");
-    nk.matchmakerRemove(ctx, data.ticket);
-    return JSON.stringify({ success: true });
-  } catch (e: any) {
-    return JSON.stringify({ success: false, error: e.message });
-  }
+  logger.warn("rpc_leave_matchmaker called but cancellation must be done via socket.removeMatchmaker() on the client");
+  return JSON.stringify({ success: true });
 }
 
 /**
