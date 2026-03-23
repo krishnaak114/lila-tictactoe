@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["ES2017"],
+    "strict": true,
+    "outFile": "./build/index.js",
+    "esModuleInterop": true,
+    "sourceMap": false,
+    "skipLibCheck": true
+  },
+  "files": [
+    "./src/nkruntime.d.ts",
+    "./src/main.ts"
+  ],
+  "exclude": ["node_modules"]
+}

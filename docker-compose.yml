@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+  # ─── CockroachDB (Nakama's default database) ──────────────────
+  cockroachdb:
+    image: cockroachdb/cockroach:v23.1.11
+    command: start-single-node --insecure --store=attrs=ssd,path=/var/roach
+    restart: unless-stopped
+    volumes:
+      - cockroach_data:/var/roach
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health?ready=1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "26257:26257"
+      - "8080:8080"  # CockroachDB admin UI
+
+  # ─── Nakama server ────────────────────────────────────────────
+  nakama:
+    image: registry.heroiclabs.com/heroiclabs/nakama:3.22.0
+    restart: unless-stopped
+    depends_on:
+      cockroachdb:
+        condition: service_healthy
+    entrypoint:
+      - "/bin/sh"
+      - "-ecx"
+      - >
+        /nakama/nakama migrate up
+        --database.address root@cockroachdb:26257/nakama
+        &&
+        exec /nakama/nakama
+        --name nakama1
+        --database.address root@cockroachdb:26257/nakama
+        --logger.level INFO
+        --session.token_expiry_sec 7200
+        --runtime.js_entrypoint_filepath /nakama/data/modules/index.js
+    volumes:
+      - ./nakama-modules/build:/nakama/data/modules
+      - nakama_data:/nakama/data
+    ports:
+      - "7349:7349"   # Client API (TCP)
+      - "7350:7350"   # Client API (HTTP + WebSocket)
+      - "7351:7351"   # Console (admin)
+    environment:
+      - NAKAMA_CONSOLE_PASSWORD=admin
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7350/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ─── Next.js frontend (dev server) ────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      # NEXT_PUBLIC_ vars are baked into the bundle at build time by Next.js.
+      # Set these args here for local Docker builds; override for production.
+      args:
+        NEXT_PUBLIC_NAKAMA_HOST: localhost
+        NEXT_PUBLIC_NAKAMA_PORT: "7350"
+        NEXT_PUBLIC_NAKAMA_USE_SSL: "false"
+        NEXT_PUBLIC_NAKAMA_KEY: defaultkey
+    restart: unless-stopped
+    depends_on:
+      nakama:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  cockroach_data:
+  nakama_data:

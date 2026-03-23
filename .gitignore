@@ -1,0 +1,10 @@
+.git/
+node_modules/
+frontend/node_modules/
+frontend/.next/
+nakama-modules/node_modules/
+nakama-modules/build/
+*.log
+.env.local
+cockroach_data/
+nakama_data/
