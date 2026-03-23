@@ -232,7 +232,6 @@ export function useGame(session: Session | null) {
     setMatchmakerTicket(null);
     setPrivateRoomId(null);
     setError(null);
-    setMySessionId(null);
   }, []);
 
   return {
