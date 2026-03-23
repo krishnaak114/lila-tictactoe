@@ -217,15 +217,15 @@ declare namespace nkruntime {
   // ─── Leaderboard ─────────────────────────────────────────────
 
   const enum SortOrder {
-    ASCENDING = 0,
-    DESCENDING = 1,
+    ASCENDING = "asc",
+    DESCENDING = "desc",
   }
 
   const enum Operator {
-    BEST = 0,
-    SET = 1,
-    INCREMENT = 2,
-    DECREMENT = 3,
+    BEST = "best",
+    SET = "set",
+    INCREMENT = "incr",
+    DECREMENT = "decr",
   }
 
   interface LeaderboardRecord {
