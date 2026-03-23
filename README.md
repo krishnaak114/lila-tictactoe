@@ -1,6 +1,12 @@
-# LILA Tic-Tac-Toe — Multiplayer Game
+# LILA Tic-Tac-Toe
 
-> Production-ready, server-authoritative multiplayer Tic-Tac-Toe built with **Nakama** + **Next.js 15**.
+**Production-ready, server-authoritative multiplayer Tic-Tac-Toe**
+
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![Nakama](https://img.shields.io/badge/Nakama-3.22.0-FF6B00)
+![Tests](https://img.shields.io/badge/tests-50%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 ---
 
@@ -8,99 +14,109 @@
 
 | Component | URL |
 |---|---|
-| Frontend | `https://lila-tictactoe.vercel.app` *(deploy via Vercel)* |
-| Nakama Server | `https://lila-nakama.fly.dev` *(deploy via Fly.io — see below)* |
-| Nakama Console | `https://lila-nakama.fly.dev:7351` |
+| **Frontend** | https://frontend-lyart-ten-57.vercel.app |
+| **Nakama Server** | https://lila-nakama.fly.dev |
+| **Nakama Console** | https://lila-nakama.fly.dev:7351 (user: `admin`) |
+
+> Open the frontend URL in **two separate browser windows** (or one normal + one incognito) to play against yourself.
 
 ---
 
-## Architecture & Design Decisions
+## Table of Contents
 
-### System Diagram
-
-```
-Browser (Next.js 15)
-  │
-  ├── REST calls  → Nakama HTTP API (:7350)
-  │     ├── POST /v2/account/authenticate/email  (login/register)
-  │     └── POST /v2/rpc/{id}                    (game RPCs)
-  │
-  └── WebSocket → Nakama Socket API (:7350)
-        ├── matchmakerAdd / matchmakerRemove  (quick match queue)
-        ├── matchJoin                         (join match by ID)
-        └── matchData (send/receive)          (real-time game events)
-              │
-              ▼
-        Nakama Server (TypeScript Runtime)
-          ├── matchmakerMatched hook → matchCreate("tictactoe")
-          ├── Match Handler (server-authoritative)
-          │     ├── matchInit    — initialise board state
-          │     ├── matchJoin    — assign X/O, broadcast start
-          │     ├── matchLoop    — validate moves, check win/draw,
-          │     │                  drive turn timer (1 tick/sec)
-          │     ├── matchLeave   — forfeit unfinished games
-          │     └── matchTerminate
-          ├── RPC: rpc_find_match  (matchmaker queue)
-          ├── RPC: rpc_create_private_room
-          ├── RPC: rpc_leave_matchmaker
-          ├── RPC: rpc_get_leaderboard
-          └── RPC: rpc_get_my_stats
-                │
-                └──▶ CockroachDB
-                      ├── Nakama built-in storage (player_stats)
-                      └── Nakama leaderboard (tictactoe_wins)
-```
-
-### Key Design Decisions
-
-| Decision | Rationale |
-|---|---|
-| **Server-authoritative moves** | All board mutations happen inside `matchLoop` on the server. The client sends `position` only — never state. This prevents any client-side cheating. |
-| **Nakama TypeScript runtime** | Nakama's TS runtime runs inside the server process (not as a separate service), keeping latency sub-millisecond for state transitions. |
-| **Op codes over channels** | Using integer op codes over Nakama's match data pipeline keeps the protocol minimal and easy to version. |
-| **CockroachDB for persistence** | Bundled with Nakama, zero extra infra. All player stats and leaderboard data survive server restarts. |
-| **1 tick/second match loop** | Drives the turn timer countdown server-side. Clients receive `OP_TIMER_TICK` every second — no client-managed timers, no drift. |
-| **Matchmaker string properties** | Mode (`classic`/`timed`) is encoded as a matchmaker string property so you only get paired with someone in the same mode. |
-| **Private rooms via match ID** | `rpc_create_private_room` creates an open authoritative match and returns its ID. Friends paste the ID to join — no lobby polling needed. |
-| **Next.js App Router + client hooks** | Game state lives in `useGame` hook (client component). No server-side data fetching needed — all state flows through Nakama sockets. |
-
-### Concurrent Games
-
-Nakama's authoritative match system natively supports unlimited concurrent game sessions. Each match is completely isolated:
-- Separate match state object per game
-- Separate WebSocket subscriptions per player
-- No shared mutable state between matches
+1. [Features](#features)
+2. [Tech Stack](#tech-stack)
+3. [How It Works](#how-it-works)
+4. [Project Structure](#project-structure)
+5. [Quick Start (Local)](#quick-start-local)
+6. [Environment Variables](#environment-variables)
+7. [Running Tests](#running-tests)
+8. [Deployment](#deployment)
+9. [API Reference](#api-reference)
+10. [Op Codes Protocol](#op-codes-protocol)
+11. [Scalability Notes](#scalability-notes)
 
 ---
 
 ## Features
 
-### Core
-- [x] Server-authoritative game logic (all validation server-side)
-- [x] Real-time move broadcasting via Nakama WebSocket
-- [x] Automatic matchmaking (paired by mode)
-- [x] Private room creation + join by ID
-- [x] Player disconnect handling (forfeit + win award)
-- [x] Email/password authentication via Nakama
-- [x] Responsive mobile-first UI
+### Core Gameplay
+- **Server-authoritative** � all board validation happens on the Nakama server; clients can never cheat
+- **Real-time** � moves broadcast instantly via WebSocket (Nakama match data)
+- **Quick Match** � automatic matchmaking pairs players by game mode
+- **Private Rooms** � create a room, share the ID, friend joins instantly
 
-### Bonus
-- [x] **Leaderboard** — global win ranking with personal stats (wins, losses, streak, best streak)
-- [x] **Timed mode** — 30-second server-side countdown per turn; timeout = forfeit
-- [x] **Concurrent games** — unlimited simultaneous matches, each fully isolated
-- [x] **Persistent stats** — win/loss/streak stored in Nakama storage, survive restarts
+### Bonus Features
+- **Timed Mode** � 30-second server-side countdown per turn; timeout = automatic forfeit
+- **Leaderboard** � global win rankings + personal stats (wins / losses / streak / best streak)
+- **Disconnect handling** � if a player leaves mid-game, the opponent is awarded the win immediately
+- **Persistent stats** � stored in Nakama storage, survive server restarts
 
 ---
 
-## Op Codes (Client ↔ Server Protocol)
+## Tech Stack
 
-| Op Code | Direction | Payload | Description |
-|---|---|---|---|
-| `1` (OP_MOVE) | Client → Server | `{ position: 0-8 }` | Player makes a move |
-| `2` (OP_STATE) | Server → Client | Full `GameState` object | Board state after validated move |
-| `3` (OP_GAME_OVER) | Server → Client | `GameOverPayload` | Game ended (win/draw) |
-| `4` (OP_TIMER_TICK) | Server → Client | `{ timeLeft, currentTurn }` | Timer countdown (timed mode) |
-| `5` (OP_OPPONENT_LEFT) | Server → Client | `{ message }` | Opponent disconnected |
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS |
+| Backend runtime | Nakama 3.22.0 TypeScript runtime |
+| Database | PostgreSQL (Fly Postgres) |
+| Frontend hosting | Vercel |
+| Backend hosting | Fly.io |
+| Testing | Jest 29 (50 tests: 24 server + 26 frontend) |
+| CI | GitHub Actions |
+
+---
+
+## How It Works
+
+### Architecture
+
+```
+Browser (Next.js)
+  �
+  +-- REST  ? Nakama HTTP (:7350)
+  �     +-- POST /v2/account/authenticate/email   ? login / register
+  �     +-- POST /v2/rpc/{id}                     ? RPCs (matchmaker, leaderboard�)
+  �
+  +-- WebSocket ? Nakama Socket (:7350)
+        +-- matchmakerAdd / matchmakerRemove       ? enter / leave queue
+        +-- matchJoin                              ? join a match
+        +-- matchData (send / receive)             ? real-time game events
+              �
+              ?
+        Nakama Server  (TypeScript runtime, in-process)
+          �
+          +-- matchmakerMatched hook ? matchCreate("tictactoe")
+          �
+          +-- Authoritative Match Handler
+                +-- matchInit     � initialise board state (empty 9-cell array)
+                +-- matchJoin     � assign X / O, broadcast OP_STATE to start game
+                +-- matchLoop     � validate moves, check win / draw,
+                �                   drive 1-tick/sec turn timer
+                +-- matchLeave    � forfeit unfinished game, award win to opponent
+                +-- matchTerminate
+```
+
+### Server-Authority Guarantee
+
+The client sends **only a position index (0�8)**. The server:
+1. Verifies it is that player's turn
+2. Verifies the cell is empty
+3. Applies the move and checks win / draw
+4. Broadcasts the new `GameState` to both players
+
+Any out-of-turn or invalid message is silently dropped. There is no way for a client to manipulate the board state.
+
+### Key Design Decisions
+
+| Decision | Why |
+|---|---|
+| Single `main.ts` server module | Keeps all authoritative logic in one file � easy to audit |
+| Integer op codes | Minimal wire payload; easy to version |
+| 1 tick/sec match loop | Drives the server-side timer countdown; no client clocks, no drift |
+| Matchmaker string properties | `mode` property ensures you only match with someone in the same mode (classic / timed) |
+| Private rooms via open match | `rpc_create_private_room` creates an open authoritative match and returns its ID � no lobby polling needed |
 
 ---
 
@@ -108,232 +124,254 @@ Nakama's authoritative match system natively supports unlimited concurrent game 
 
 ```
 lila-tictactoe/
-├── nakama-modules/          # Nakama TypeScript server module
-│   ├── src/
-│   │   └── main.ts          # All server logic (match handler + RPCs)
-│   ├── build/               # Compiled JS (gitignored, generated by tsc)
-│   │   └── index.js
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── frontend/                # Next.js 15 application
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── layout.tsx
-│   │   │   ├── page.tsx     # Main game page (all-in-one SPA)
-│   │   │   └── globals.css
-│   │   ├── components/
-│   │   │   ├── Board.tsx        # 3×3 interactive grid
-│   │   │   ├── Timer.tsx        # Countdown bar (timed mode)
-│   │   │   ├── GameOverModal.tsx # Result screen
-│   │   │   └── Leaderboard.tsx  # Rankings + personal stats
-│   │   ├── hooks/
-│   │   │   ├── useGame.ts   # Core game logic + socket events
-│   │   │   └── useAuth.ts   # Session management
-│   │   ├── lib/
-│   │   │   └── nakama.ts    # Nakama client + RPC helpers
-│   │   └── types/
-│   │       └── game.ts      # Shared TypeScript types + op codes
-│   ├── Dockerfile
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── docker-compose.yml       # Local full-stack dev environment
-└── README.md
+�
++-- nakama-modules/            # Nakama TypeScript server module
+�   +-- src/
+�   �   +-- main.ts            # ALL server logic (match handler + RPCs)
+�   �   +-- __tests__/
+�   �       +-- gameLogic.test.ts   # 24 server-side unit tests
+�   +-- build/                 # Compiled output (gitignored, generated by tsc)
+�   +-- package.json
+�   +-- tsconfig.json
+�
++-- frontend/                  # Next.js 16 application
+�   +-- src/
+�   �   +-- app/
+�   �   �   +-- layout.tsx
+�   �   �   +-- page.tsx       # Main game page (SPA-style, all game states here)
+�   �   �   +-- globals.css
+�   �   +-- components/
+�   �   �   +-- Board.tsx          # 3�3 interactive grid
+�   �   �   +-- Timer.tsx          # Countdown bar (timed mode only)
+�   �   �   +-- GameOverModal.tsx  # Result overlay (win / lose / draw)
+�   �   �   +-- Leaderboard.tsx    # Rankings table + personal stats
+�   �   +-- hooks/
+�   �   �   +-- useGame.ts     # Game state machine + WebSocket event handling
+�   �   �   +-- useAuth.ts     # Nakama session lifecycle
+�   �   +-- lib/
+�   �   �   +-- nakama.ts      # Nakama JS client + typed RPC helpers
+�   �   +-- types/
+�   �       +-- game.ts        # Shared TypeScript types + op code constants
+�   +-- __tests__/             # 26 frontend component + hook tests
+�   +-- .eslintrc.json
+�   +-- Dockerfile
+�   +-- package.json
+�   +-- tsconfig.json
+�
++-- Dockerfile                 # Multi-stage: TS build ? Nakama image (used by Fly.io)
++-- fly.toml                   # Fly.io deployment config
++-- docker-compose.yml         # Local full-stack dev environment
++-- README.md
 ```
 
 ---
 
-## Setup & Installation
+## Quick Start (Local)
 
 ### Prerequisites
+
 - [Node.js 20+](https://nodejs.org/)
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 
-### Option A — Docker Compose (Recommended)
+### 1 � Clone and build the server module
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/your-username/lila-tictactoe.git
+git clone https://github.com/krishnaak114/lila-tictactoe.git
 cd lila-tictactoe
 
-# 2. Build the Nakama TypeScript module
 cd nakama-modules
 npm install
-npm run build        # compiles src/main.ts → build/index.js
+npm run build          # compiles src/main.ts ? build/index.js
 cd ..
-
-# 3. Start everything (CockroachDB + Nakama + Frontend)
-docker compose up --build
-
-# Services:
-#   Frontend:        http://localhost:3000
-#   Nakama HTTP API: http://localhost:7350
-#   Nakama Console:  http://localhost:7351  (admin/admin)
-#   CockroachDB UI:  http://localhost:8080
 ```
 
-### Option B — Frontend Dev Server (with running Nakama)
+### 2 � Start everything with Docker Compose
 
 ```bash
-cd frontend
-cp .env.example .env.local
-# Edit .env.local if your Nakama is not on localhost:7350
-npm install
-npm run dev
-# Frontend: http://localhost:3000
+docker compose up --build
 ```
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Nakama HTTP API | http://localhost:7350 |
+| Nakama Console | http://localhost:7351 (admin / admin) |
+| PostgreSQL | localhost:5432 |
+
+### 3 � Play locally
+
+1. Open http://localhost:3000 in **two windows** (one normal, one incognito)
+2. Register a different account in each window
+3. Both click **Quick Match ? Classic** � you are paired automatically
+4. Take turns clicking cells; only the active player's cells are clickable
 
 ---
 
-## Deployment
+## Environment Variables
 
-### Deploy Nakama to Fly.io
+### Frontend (`frontend/.env.local`)
 
-Fly.io is the simplest path for Nakama deployment (persistent volumes, cheap, global).
+Create for local development:
 
-```bash
-# Install Fly CLI
-curl -L https://fly.io/install.sh | sh
-
-# Login
-fly auth login
-
-# From the repo root
-fly launch --name lila-nakama --region lhr --no-deploy
-
-# Attach a volume for data persistence
-fly volumes create nakama_data --size 5 --region lhr
-
-# Set secrets
-fly secrets set NAKAMA_CONSOLE_PASSWORD=your-strong-password
-
-# Deploy
-fly deploy
+```env
+NEXT_PUBLIC_NAKAMA_HOST=localhost
+NEXT_PUBLIC_NAKAMA_PORT=7350
+NEXT_PUBLIC_NAKAMA_USE_SSL=false
+NEXT_PUBLIC_NAKAMA_KEY=defaultkey
 ```
 
-**`fly.toml`** (place in repo root):
+For production (set on Vercel):
 
-```toml
-app = "lila-nakama"
-primary_region = "lhr"
-
-[build]
-  image = "registry.heroiclabs.com/heroiclabs/nakama:3.22.0"
-
-[mounts]
-  source = "nakama_data"
-  destination = "/nakama/data"
-
-[[services]]
-  internal_port = 7350
-  protocol = "tcp"
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-
-[env]
-  NAKAMA_DATABASE_ADDRESS = "root@<your-cockroachdb-url>"
-```
-
-> For CockroachDB in production, use [CockroachDB Serverless](https://cockroachlabs.com/free) (free tier) and set `NAKAMA_DATABASE_ADDRESS` accordingly.
-
-### Deploy Frontend to Vercel
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-cd frontend
-vercel --prod
-```
-
-Set these environment variables in the Vercel dashboard:
-```
+```env
 NEXT_PUBLIC_NAKAMA_HOST=lila-nakama.fly.dev
 NEXT_PUBLIC_NAKAMA_PORT=443
 NEXT_PUBLIC_NAKAMA_USE_SSL=true
 NEXT_PUBLIC_NAKAMA_KEY=defaultkey
 ```
 
+### Nakama (Fly.io secrets)
+
+| Secret | How to set | Description |
+|---|---|---|
+| `DATABASE_URL` | Auto-set by `flyctl postgres attach` | Postgres connection string |
+| `NAKAMA_CONSOLE_PASSWORD` | `flyctl secrets set NAKAMA_CONSOLE_PASSWORD=...` | Nakama console admin password |
+
 ---
 
-## Testing Multiplayer Functionality
+## Running Tests
 
-### Method 1 — Two Browser Tabs (Quickest)
+### Server tests (24 tests)
 
-1. Open `http://localhost:3000` in **Tab 1** → Register as `player1@test.com`
-2. Open `http://localhost:3000` in **Tab 2** (or incognito) → Register as `player2@test.com`
-3. On both tabs: select **Classic** mode → click **Quick Match**
-4. Both players match within seconds → game starts
-5. Alternate clicking cells. Only the active player's turn is clickable — server rejects out-of-turn moves
-
-### Method 2 — Private Room
-
-1. Tab 1: click **Create Private Room** → copy the Room ID
-2. Tab 2: click **Join with Room ID** → paste ID → Join
-3. Game starts immediately
-
-### Method 3 — Timed Mode Timeout Test
-
-1. Start a **Timed** mode match
-2. Have one player do nothing for 30 seconds
-3. Observe server-side forfeit → other player wins automatically
-
-### Verifying Server-Authority (Cheat Prevention)
-
-Open browser DevTools on either tab and try:
-```javascript
-// This does nothing — the server ignores out-of-turn messages
-socket.sendMatchState(matchId, 1, encoder.encode(JSON.stringify({ position: 0 })));
+```bash
+cd nakama-modules
+npm test
 ```
-Only the player whose `sessionId === state.currentTurn` can place marks.
+
+Covers: win detection (all 8 winning lines), draw detection, out-of-turn move rejection, invalid position rejection, move application, timer behaviour, disconnect forfeit logic.
+
+### Frontend tests (26 tests)
+
+```bash
+cd frontend
+npm test
+```
+
+Covers: Board, Timer, GameOverModal, Leaderboard components, useGame and useAuth hooks, key user flows.
+
+### CI
+
+Every push to `main` runs GitHub Actions with two parallel jobs:
+
+| Job | Steps |
+|---|---|
+| `server` | TypeScript type-check ? Jest tests ? build |
+| `frontend` | TypeScript type-check ? ESLint ? Jest tests ? Next.js build |
+
+---
+
+## Deployment
+
+### Nakama on Fly.io
+
+The repository includes a ready-to-use `Dockerfile` and `fly.toml`.
+
+```bash
+# Install Fly CLI
+curl -L https://fly.io/install.sh | sh          # macOS / Linux
+winget install Fly.io.flyctl                     # Windows
+
+flyctl auth login
+
+# Create the Fly app
+flyctl apps create lila-nakama
+
+# Create and attach Postgres
+flyctl postgres create --name lila-nakama-db --region lhr
+flyctl postgres attach lila-nakama-db            # auto-sets DATABASE_URL secret
+
+# Set the console password
+flyctl secrets set NAKAMA_CONSOLE_PASSWORD=your-strong-password
+
+# Deploy
+flyctl deploy --app lila-nakama
+```
+
+> **Note on `DATABASE_URL` format:** Fly sets `DATABASE_URL` as `postgres://user:pass@host/db?sslmode=disable`. The `Dockerfile` startup script automatically strips the `postgres://` prefix and `?sslmode=disable` suffix so Nakama receives the format it expects (`user:pass@host/db`).
+
+### Frontend on Vercel
+
+```bash
+cd frontend
+npx vercel --prod
+```
+
+Set environment variables (run once, then redeploy):
+
+```bash
+npx vercel env add NEXT_PUBLIC_NAKAMA_HOST production     # lila-nakama.fly.dev
+npx vercel env add NEXT_PUBLIC_NAKAMA_PORT production     # 443
+npx vercel env add NEXT_PUBLIC_NAKAMA_USE_SSL production  # true
+npx vercel env add NEXT_PUBLIC_NAKAMA_KEY production      # defaultkey
+npx vercel --prod
+```
 
 ---
 
 ## API Reference
 
-### RPC Endpoints (call via `POST /v2/rpc/{id}`)
-
-| RPC ID | Auth | Payload | Returns |
-|---|---|---|---|
-| `rpc_find_match` | Required | `{ "mode": "classic"\|"timed" }` | `{ "ticket": "...", "mode": "..." }` |
-| `rpc_leave_matchmaker` | Required | `{ "ticket": "..." }` | `{ "success": true }` |
-| `rpc_create_private_room` | Required | `{ "mode": "classic"\|"timed" }` | `{ "matchId": "...", "mode": "..." }` |
-| `rpc_get_leaderboard` | Required | `{}` | `{ "records": [...] }` |
-| `rpc_get_my_stats` | Required | `{}` | `{ "wins", "losses", "streak", "bestStreak" }` |
-
 ### Authentication
 
 ```bash
-# Register / Login
-curl -X POST http://localhost:7350/v2/account/authenticate/email \
+# Register a new account (set "create": true) or log in (set "create": false)
+curl -X POST https://lila-nakama.fly.dev/v2/account/authenticate/email \
   -H "Authorization: Basic $(echo -n 'defaultkey:' | base64)" \
   -H "Content-Type: application/json" \
   -d '{"email":"test@test.com","password":"password123","create":true,"username":"testuser"}'
+
+# Response: { "token": "<jwt>", "refresh_token": "...", "created": true }
 ```
+
+Use the returned `token` as `Authorization: Bearer <jwt>` on all subsequent requests.
+
+### RPC Endpoints
+
+Base URL: `POST https://lila-nakama.fly.dev/v2/rpc/{id}`
+
+| RPC ID | Payload | Returns |
+|---|---|---|
+| `rpc_find_match` | `{ "mode": "classic" \| "timed" }` | `{ "ticket": "...", "mode": "..." }` |
+| `rpc_leave_matchmaker` | `{ "ticket": "..." }` | `{ "success": true }` |
+| `rpc_create_private_room` | `{ "mode": "classic" \| "timed" }` | `{ "matchId": "...", "mode": "..." }` |
+| `rpc_get_leaderboard` | `{}` | `{ "records": [{ "username", "wins", "rank" }] }` |
+| `rpc_get_my_stats` | `{}` | `{ "wins", "losses", "streak", "bestStreak" }` |
 
 ---
 
-## Nakama Configuration
+## Op Codes Protocol
 
-Key Nakama server settings (set via CLI args or config file):
+All game messages flow over the Nakama WebSocket as **match data** with an integer op code.
 
-| Setting | Value | Purpose |
-|---|---|---|
-| `session.token_expiry_sec` | `7200` | 2-hour JWT sessions |
-| `runtime.js_entrypoint_filepath` | `/nakama/data/modules/index.js` | Compiled TS module |
-| `logger.level` | `INFO` | Server logs |
-| `tickRate` | `1` | 1 tick/sec per match (drives timer) |
+| Op Code | Constant | Direction | Payload | Description |
+|---|---|---|---|---|
+| `1` | `OP_MOVE` | Client ? Server | `{ "position": 0�8 }` | Player attempts a move |
+| `2` | `OP_STATE` | Server ? Client | Full `GameState` object | Board state after every validated move |
+| `3` | `OP_GAME_OVER` | Server ? Client | `{ "winner", "reason", "board" }` | Game ended (win / draw / forfeit) |
+| `4` | `OP_TIMER_TICK` | Server ? Client | `{ "timeLeft", "currentTurn" }` | Per-second countdown (timed mode) |
+| `5` | `OP_OPPONENT_LEFT` | Server ? Client | `{ "message" }` | Opponent disconnected mid-game |
+
+The client never sends state � it only sends a position. The server is the single source of truth.
 
 ---
 
 ## Scalability Notes
 
-- Nakama runs stateful match handlers in-process. For horizontal scaling, use Nakama's [cluster mode](https://heroiclabs.com/docs/nakama/getting-started/cluster/) with multiple nodes behind a load balancer.
-- Each match is pinned to one node via consistent hashing on match ID.
-- CockroachDB scales horizontally without application changes.
-- The frontend is completely stateless and scales infinitely on Vercel/CDN.
+- **Unlimited concurrent games** � each match is a fully isolated state object; no shared mutable state between matches
+- **Horizontal scaling** � Nakama supports [cluster mode](https://heroiclabs.com/docs/nakama/getting-started/cluster/) with multiple nodes behind a load balancer; matches are pinned to one node via consistent hashing on match ID
+- **Frontend** � completely stateless, scales infinitely on Vercel / CDN edges
+- **Database** � Fly Postgres can be replaced with CockroachDB for multi-region deployments with zero application-code changes
+
+---
+
+## License
+
+MIT
