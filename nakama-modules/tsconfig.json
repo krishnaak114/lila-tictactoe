@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES5",
     "lib": ["ES2017"],
     "strict": true,
     "outFile": "./build/index.js",
