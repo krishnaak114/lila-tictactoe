@@ -389,7 +389,8 @@ function _recordResult(
     if (!winnerId || !loserId) return;
 
     // Write wins leaderboard (higher = better, score = total wins)
-    nk.leaderboardRecordWrite(LEADERBOARD_ID, winnerId, state.playerUsernames[winnerSessionId], 1, 0, {}, true);
+    // No override param — use the leaderboard's default INCREMENT operator
+    nk.leaderboardRecordWrite(LEADERBOARD_ID, winnerId, state.playerUsernames[winnerSessionId] || "", 1, 0, {});
 
     // Store per-player stats in storage
     _updatePlayerStats(nk, logger, winnerId, true);
@@ -633,8 +634,12 @@ function InitModule(
       "",           // reset schedule (never auto-reset)
       {}
     );
-  } catch (e) {
-    // Already exists  -  safe to ignore
+    logger.info("Leaderboard '%s' created", LEADERBOARD_ID);
+  } catch (e: any) {
+    // Ignore 'already exists'; log anything else
+    if (!e.message || !e.message.includes("already exists")) {
+      logger.warn("leaderboardCreate: %s", e.message);
+    }
   }
 
   logger.info("LILA Tic-Tac-Toe module initialised");

@@ -42,10 +42,10 @@ export function Board({
                 "transition-all duration-200 select-none",
                 "border-2",
                 isWinCell
-                  ? "border-yellow-400 bg-yellow-50 scale-105 animate-bounce-once"
-                  : "border-slate-200 bg-white",
+                  ? "border-yellow-400 bg-yellow-100 scale-105 animate-bounce-once"
+                  : "border-brand-100 bg-brand-50 shadow-sm",
                 isEmpty && isMyTurn && !disabled
-                  ? "hover:bg-brand-50 hover:border-brand-500 cursor-pointer hover:scale-105"
+                  ? "hover:bg-brand-100 hover:border-brand-400 cursor-pointer hover:scale-105"
                   : "cursor-default",
                 cell === "X" ? "text-brand-600" : "text-rose-500"
               )}
