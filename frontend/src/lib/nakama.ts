@@ -27,7 +27,7 @@ export async function authenticateEmail(
   password: string,
   username?: string
 ): Promise<Session> {
-  const session = await nakamaClient.authenticateEmail(email, password, true, username);
+  const session = await nakamaClient.authenticateEmail(email, password, false, username);
   persistSession(session);
   return session;
 }
@@ -37,7 +37,7 @@ export async function registerEmail(
   password: string,
   username: string
 ): Promise<Session> {
-  const session = await nakamaClient.authenticateEmail(email, password, false, username);
+  const session = await nakamaClient.authenticateEmail(email, password, true, username);
   persistSession(session);
   return session;
 }
