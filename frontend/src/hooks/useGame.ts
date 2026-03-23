@@ -35,6 +35,12 @@ export function useGame(session: Session | null) {
   const [privateRoomId, setPrivateRoomId] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
+  // Latest-value refs so the long-lived socket callback can read current state
+  // without adding gameState/mySessionId to the socket useEffect deps.
+  const latestGameStateRef = useRef<GameState | null>(null);
+  const latestMySessionIdRef = useRef<string | null>(null);
+  latestGameStateRef.current = gameState;
+  latestMySessionIdRef.current = mySessionId;
 
   // ── Setup socket ────────────────────────────────────────────
   useEffect(() => {
@@ -93,16 +99,18 @@ export function useGame(session: Session | null) {
               break;
             }
             case OP_OPPONENT_LEFT: {
+              const gs = latestGameStateRef.current;
+              const sid = latestMySessionIdRef.current;
               setGameOver({
-                board: gameState?.board || EMPTY_BOARD,
+                board: gs?.board || EMPTY_BOARD,
                 gameOver: true,
                 draw: false,
-                winner: mySessionId,
+                winner: sid,
                 winnerUsername: "You",
                 winLine: null,
-                playerSymbols: gameState?.playerSymbols || {},
-                playerUsernames: gameState?.playerUsernames || {},
-                mode: gameState?.mode || "classic",
+                playerSymbols: gs?.playerSymbols || {},
+                playerUsernames: gs?.playerUsernames || {},
+                mode: gs?.mode || "classic",
               });
               setStatus("game_over");
               break;
@@ -115,8 +123,8 @@ export function useGame(session: Session | null) {
           setError("Connection lost. Please refresh.");
         };
 
-      } catch (e: any) {
-        if (mounted) setError(e.message);
+      } catch (e: unknown) {
+        if (mounted) setError(e instanceof Error ? e.message : "Connection error");
       }
     })();
 
@@ -151,8 +159,8 @@ export function useGame(session: Session | null) {
     try {
       const result = await rpcFindMatch(session, mode);
       setMatchmakerTicket(result.ticket);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Matchmaking error");
       setStatus("idle");
     }
   }, [session]);
@@ -161,7 +169,7 @@ export function useGame(session: Session | null) {
     if (!session || !matchmakerTicket) return;
     try {
       await rpcLeaveMatchmaker(session, matchmakerTicket);
-    } catch (_) {}
+    } catch { /* ignore — best effort cancel */ }
     setMatchmakerTicket(null);
     setStatus("idle");
   }, [session, matchmakerTicket]);
@@ -178,8 +186,8 @@ export function useGame(session: Session | null) {
       setMatchId(result.matchId);
       setStatus("waiting_for_opponent");
       await socketRef.current.joinMatch(result.matchId);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Create room error");
       setStatus("idle");
     }
   }, [session]);
@@ -194,8 +202,8 @@ export function useGame(session: Session | null) {
       setMatchId(roomId);
       setStatus("playing");
       await socketRef.current.joinMatch(roomId);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Join room error");
       setStatus("idle");
     }
   }, [session]);

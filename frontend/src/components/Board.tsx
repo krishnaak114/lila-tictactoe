@@ -16,7 +16,6 @@ interface BoardProps {
 export function Board({
   board,
   winLine,
-  mySymbol,
   currentTurn,
   mySessionId,
   onCellClick,

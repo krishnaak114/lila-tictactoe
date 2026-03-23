@@ -91,7 +91,6 @@ describe("GameOverModal", () => {
       renderModal(makeResult());
       // Each cell is a div with a board value (or empty)
       // The mini board has 9 children; query by the board container
-      const board = makeResult().board;
       // There are 9 cells + the rest of the modal — count divs within the replay grid
       const cells = document.querySelectorAll(".grid.grid-cols-3 > div");
       expect(cells).toHaveLength(9);

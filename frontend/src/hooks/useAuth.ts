@@ -7,7 +7,6 @@ import {
   clearSession,
   getAccount,
   loadSession,
-  nakamaClient,
   refreshSession,
   registerEmail,
 } from "@/lib/nakama";
@@ -55,8 +54,8 @@ export function useAuth() {
         username: account.user?.username || "",
         email: account.email,
       });
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -66,8 +65,8 @@ export function useAuth() {
       const s = await authenticateEmail(email, password);
       setSession(s);
       await _fetchUser(s);
-    } catch (e: any) {
-      setError(e.message || "Login failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Login failed");
       throw e;
     }
   }, []);
@@ -78,8 +77,8 @@ export function useAuth() {
       const s = await registerEmail(email, password, username);
       setSession(s);
       await _fetchUser(s);
-    } catch (e: any) {
-      setError(e.message || "Registration failed");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Registration failed");
       throw e;
     }
   }, []);

@@ -88,8 +88,8 @@ export default function HomePage() {
       } else {
         await register(email, password, username);
       }
-    } catch (err: any) {
-      setAuthError(err.message || "Authentication failed");
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
       setAuthLoading(false);
     }
