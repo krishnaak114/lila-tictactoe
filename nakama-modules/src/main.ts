@@ -630,7 +630,7 @@ function InitModule(
       false,        // not authoritative  -  anyone can write via server
       nkruntime.SortOrder.DESCENDING,
       nkruntime.Operator.INCREMENT,
-      "0",          // reset schedule (never auto-reset)
+      "",           // reset schedule (never auto-reset)
       {}
     );
   } catch (e) {
