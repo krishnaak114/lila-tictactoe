@@ -23,5 +23,5 @@ primary_region = "lhr"
 
   [[services.tcp_checks]]
     interval = "15s"
-    timeout = "5s"
-    grace_period = "30s"
+    timeout = "10s"
+    grace_period = "120s"

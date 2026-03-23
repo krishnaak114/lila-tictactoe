@@ -10,12 +10,9 @@ RUN npx tsc
 FROM registry.heroiclabs.com/heroiclabs/nakama:3.22.0
 COPY --from=builder /build/build/index.js /nakama/modules/index.js
 
-ENTRYPOINT ["/bin/sh", "-ecx", \
-  "/nakama/nakama migrate up --database.address \"${DATABASE_URL}\" && \
-  exec /nakama/nakama \
-    --name nakama1 \
-    --database.address \"${DATABASE_URL}\" \
-    --logger.level INFO \
-    --session.token_expiry_sec 7200 \
-    --runtime.js_entrypoint_filepath /nakama/modules/index.js \
-    --console.password \"${NAKAMA_CONSOLE_PASSWORD:-admin}\""]
+# Write startup script — strips postgres:// prefix and ?sslmode=... suffix
+# because Nakama's --database.address expects user:pass@host:port/db format
+RUN printf '#!/bin/sh\nset -ex\n# Convert postgres:// URI to Nakama database address format\nDB=$(echo "$DATABASE_URL" | sed "s|postgres://||" | sed "s|?.*||")\n/nakama/nakama migrate up --database.address "$DB"\nexec /nakama/nakama \\\n  --name nakama1 \\\n  --database.address "$DB" \\\n  --logger.level INFO \\\n  --session.token_expiry_sec 7200 \\\n  --runtime.js_entrypoint_filepath /nakama/modules/index.js \\\n  --console.password "${NAKAMA_CONSOLE_PASSWORD:-admin}"\n' > /nakama/start.sh \
+  && chmod +x /nakama/start.sh
+
+ENTRYPOINT ["/nakama/start.sh"]
