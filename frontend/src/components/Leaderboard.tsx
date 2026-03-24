@@ -33,6 +33,17 @@ export function Leaderboard({ entries, myStats, myUserId }: LeaderboardProps) {
           <span className="text-lg font-bold text-slate-800">🏆 Global Leaderboard</span>
         </div>
 
+        {/* Column header */}
+        {entries.length > 0 && (
+          <div className="grid grid-cols-12 text-[10px] text-slate-400 uppercase tracking-wider px-4 py-2 border-b border-slate-100">
+            <span className="col-span-1">#</span>
+            <span className="col-span-5">Player</span>
+            <span className="col-span-3 text-center">W / L / D</span>
+            <span className="col-span-2 text-center">Streak</span>
+            <span className="col-span-1 text-right">Wins</span>
+          </div>
+        )}
+
         {entries.length === 0 ? (
           <p className="text-slate-400 text-center py-8">No games played yet. Be the first!</p>
         ) : (
@@ -44,20 +55,26 @@ export function Leaderboard({ entries, myStats, myUserId }: LeaderboardProps) {
                 <div
                   key={entry.userId}
                   className={clsx(
-                    "flex items-center gap-3 px-4 py-3",
+                    "grid grid-cols-12 items-center px-4 py-3",
                     isMe ? "bg-brand-50" : "hover:bg-slate-50"
                   )}
                 >
-                  <span className="text-xl w-8 text-center">
+                  <span className="col-span-1 text-lg text-center">
                     {medals[entry.rank] || `#${entry.rank}`}
                   </span>
-                  <span className={clsx("flex-1 font-medium", isMe ? "text-brand-700" : "text-slate-700")}>
+                  <span className={clsx("col-span-5 font-medium text-sm", isMe ? "text-brand-700" : "text-slate-700")}>
                     {entry.username}
                     {isMe && <span className="ml-1 text-xs text-brand-500">(you)</span>}
                   </span>
-                  <span className="text-green-600 font-bold text-sm">
-                    {entry.wins}W
+                  <span className="col-span-3 text-xs text-center">
+                    <span className="text-green-600 font-semibold">{entry.wins}</span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-rose-500">{entry.losses ?? 0}</span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-400">{entry.draws ?? 0}</span>
                   </span>
+                  <span className="col-span-2 text-xs text-center text-yellow-600 font-medium">{entry.streak ?? 0}</span>
+                  <span className="col-span-1 text-right text-green-600 font-bold text-sm">{entry.wins}</span>
                 </div>
               );
             })}

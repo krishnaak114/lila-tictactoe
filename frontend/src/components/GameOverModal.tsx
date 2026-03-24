@@ -1,11 +1,14 @@
 "use client";
 
-import { GameOverPayload } from "@/types/game";
+import { GameOverPayload, LeaderboardEntry, PlayerStats } from "@/types/game";
 import clsx from "clsx";
 
 interface GameOverModalProps {
   result: GameOverPayload;
   mySessionId: string | null;
+  myUserId?: string | null;
+  lbEntries?: LeaderboardEntry[];
+  myStats?: PlayerStats | null;
   onPlayAgain: () => void;
   onHome: () => void;
 }
@@ -13,6 +16,8 @@ interface GameOverModalProps {
 export function GameOverModal({
   result,
   mySessionId,
+  lbEntries = [],
+  myStats,
   onPlayAgain,
   onHome,
 }: GameOverModalProps) {
@@ -39,51 +44,118 @@ export function GameOverModal({
     emoji = "😔";
   }
 
+  const winnerSymbol = result.winner ? result.playerSymbols[result.winner] : null;
+
+  // Build per-player stat rows
+  const playerRows = Object.keys(result.playerUsernames).map((sid) => {
+    const username = result.playerUsernames[sid];
+    const isMe = sid === mySessionId;
+    const symbol = result.playerSymbols[sid];
+    const entry = lbEntries.find((e) => e.username === username);
+    // For the current player prefer myStats (freshest data)
+    const wins   = isMe && myStats ? myStats.wins          : (entry?.wins   ?? 0);
+    const losses = isMe && myStats ? myStats.losses         : (entry?.losses ?? 0);
+    const draws  = isMe && myStats ? (myStats.draws  ?? 0)  : (entry?.draws  ?? 0);
+    const streak = isMe && myStats ? myStats.streak          : (entry?.streak ?? 0);
+    return { username, isMe, symbol, wins, losses, draws, streak };
+  });
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-3xl shadow-2xl p-8 mx-4 w-full max-w-sm text-center animate-slide-up">
-        <div className="text-6xl mb-4">{emoji}</div>
-        <h2 className={clsx(
-          "text-3xl font-extrabold mb-2",
-          isDraw ? "text-slate-700" : iWon ? "text-brand-600" : "text-rose-500"
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900 px-6 animate-fade-in">
+
+      {/* Winner's symbol (large, like sample) */}
+      {!isDraw && winnerSymbol && (
+        <div className={clsx(
+          "text-8xl font-black leading-none mb-1",
+          winnerSymbol === "X" ? "text-rose-300" : "text-white"
         )}>
-          {headline}
-        </h2>
-        <p className="text-slate-500 mb-6">{subtext}</p>
+          {winnerSymbol}
+        </div>
+      )}
 
-        {/* Mini board replay */}
-        <div className="grid grid-cols-3 gap-1 mb-6 w-36 mx-auto">
-          {result.board.map((cell, i) => {
-            const isWin = result.winLine?.includes(i) ?? false;
-            return (
+      {/* Emoji */}
+      <div className="text-4xl mb-1">{emoji}</div>
+
+      {/* Headline */}
+      <h2 className={clsx(
+        "text-2xl font-extrabold mb-1",
+        isDraw ? "text-slate-300" : iWon ? "text-teal-400" : "text-rose-400"
+      )}>
+        {headline}
+      </h2>
+      <p className="text-slate-500 text-sm mb-4">{subtext}</p>
+
+      {/* Mini board replay — keep .grid.grid-cols-3 > div structure */}
+      <div className="grid grid-cols-3 gap-1 mb-5 w-28 mx-auto">
+        {result.board.map((cell, i) => {
+          const isWin = result.winLine?.includes(i) ?? false;
+          return (
+            <div
+              key={i}
+              className={clsx(
+                "w-8 h-8 rounded flex items-center justify-center text-sm font-bold",
+                isWin ? "bg-yellow-900/50 border border-yellow-500" : "bg-slate-800",
+                cell === "X" ? "text-rose-300" : "text-white"
+              )}
+            >
+              {cell}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Stats table for both players */}
+      {playerRows.length > 0 && (
+        <div className="w-full max-w-xs mb-5">
+          <p className="text-teal-400 text-xs font-semibold mb-2">🏆 Leaderboard</p>
+          <div className="bg-slate-800 rounded-xl overflow-hidden">
+            <div className="grid grid-cols-4 text-[10px] text-slate-500 uppercase tracking-wider px-3 py-2 border-b border-slate-700">
+              <span>Player</span>
+              <span className="text-center">W/L/D</span>
+              <span className="text-center">Streak</span>
+              <span className="text-right">Score</span>
+            </div>
+            {playerRows.map(({ username, isMe, symbol, wins, losses, draws, streak }) => (
               <div
-                key={i}
-                className={clsx(
-                  "w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold",
-                  isWin ? "bg-yellow-100 border border-yellow-400" : "bg-slate-100",
-                  cell === "X" ? "text-brand-600" : "text-rose-500"
-                )}
+                key={username}
+                className={clsx("grid grid-cols-4 items-center px-3 py-2.5", isMe && "bg-slate-700/50")}
               >
-                {cell}
+                <div>
+                  <p className={clsx("text-xs font-semibold truncate", isMe ? "text-white" : "text-slate-300")}>
+                    {username}
+                    {isMe && <span className="text-[10px] text-slate-500 ml-1">(you)</span>}
+                  </p>
+                  <p className="text-[10px] text-slate-500">{symbol}</p>
+                </div>
+                <p className="text-xs text-center">
+                  <span className="text-green-400">{wins}</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-rose-400">{losses}</span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-slate-400">{draws}</span>
+                </p>
+                <p className="text-xs text-center text-yellow-400">{streak}</p>
+                <p className="text-xs text-right font-bold text-white">{wins}</p>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
+      )}
 
-        <div className="flex gap-3">
-          <button
-            onClick={onPlayAgain}
-            className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold hover:bg-brand-600 transition"
-          >
-            Play Again
-          </button>
-          <button
-            onClick={onHome}
-            className="flex-1 py-3 rounded-xl bg-slate-100 text-slate-700 font-semibold hover:bg-slate-200 transition"
-          >
-            Home
-          </button>
-        </div>
+      {/* Action buttons */}
+      <div className="flex gap-3 w-full max-w-xs">
+        <button
+          onClick={onPlayAgain}
+          className="flex-1 py-3 rounded-xl border-2 border-slate-600 text-white font-semibold text-sm hover:border-teal-400 hover:text-teal-400 transition"
+        >
+          Play Again
+        </button>
+        <button
+          onClick={onHome}
+          className="flex-1 py-3 rounded-xl border-2 border-slate-600 text-slate-400 font-semibold text-sm hover:border-slate-400 transition"
+        >
+          Home
+        </button>
       </div>
     </div>
   );

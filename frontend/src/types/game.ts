@@ -45,6 +45,7 @@ export interface TimerTickPayload {
 export interface PlayerStats {
   wins: number;
   losses: number;
+  draws?: number;
   streak: number;
   bestStreak: number;
 }
@@ -53,6 +54,9 @@ export interface LeaderboardEntry {
   rank: number;
   username: string;
   wins: number;
+  losses?: number;
+  draws?: number;
+  streak?: number;
   userId: string;
 }
 

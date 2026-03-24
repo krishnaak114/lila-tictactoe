@@ -538,12 +538,33 @@ function rpcGetLeaderboard(
 ): string {
   try {
     const result = nk.leaderboardRecordsList(LEADERBOARD_ID, [], 10, undefined, 1);
-    const records = result.records.map((r) => ({
-      rank: r.rank,
-      username: r.username,
-      wins: r.score,
-      userId: r.ownerId,
-    }));
+
+    // Batch-read per-player stats (losses, draws, streak) in a single call
+    const statsMap: Record<string, any> = {};
+    if (result.records.length > 0) {
+      const reads: nkruntime.StorageReadRequest[] = result.records.map((r) => ({
+        collection: "player_stats",
+        key: "stats",
+        userId: r.ownerId,
+      }));
+      const statsResults = nk.storageRead(reads);
+      for (const s of statsResults) {
+        statsMap[s.userId] = s.value;
+      }
+    }
+
+    const records = result.records.map((r) => {
+      const stats = statsMap[r.ownerId] || {};
+      return {
+        rank: r.rank,
+        username: r.username,
+        wins: r.score,
+        losses: stats.losses || 0,
+        draws: stats.draws || 0,
+        streak: stats.streak || 0,
+        userId: r.ownerId,
+      };
+    });
     return JSON.stringify({ records });
   } catch (e: any) {
     logger.error("Leaderboard fetch error: %s", e.message);

@@ -462,6 +462,9 @@ export default function HomePage() {
               <GameOverModal
                 result={gameOver}
                 mySessionId={mySessionId}
+                myUserId={user?.userId || null}
+                lbEntries={lbEntries}
+                myStats={myStats}
                 onPlayAgain={() => {
                   resetGame();
                   // Small delay then re-queue
