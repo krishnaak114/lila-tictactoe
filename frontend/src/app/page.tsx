@@ -194,7 +194,12 @@ export default function HomePage() {
 
   // ── Main App ──────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-slate-100">
+    <div className={clsx(
+      "min-h-screen transition-colors duration-300",
+      status === "playing" || status === "game_over"
+        ? "bg-slate-900"
+        : "bg-gradient-to-br from-brand-50 to-slate-100"
+    )}>
       {/* Header */}
       <header className="bg-white/80 backdrop-blur sticky top-0 z-40 border-b border-slate-200">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
@@ -384,35 +389,37 @@ export default function HomePage() {
 
             {/* ── PLAYING ──────────────────────────────────────── */}
             {status === "playing" && gameState && (
-              <div className="space-y-4 animate-fade-in">
-                {/* Player info bar */}
-                <div className="bg-white rounded-2xl p-3 shadow-sm border border-slate-100">
-                  <div className="flex items-center justify-between">
-                    <div className={clsx(
-                      "flex items-center gap-2 px-3 py-2 rounded-xl transition",
-                      isMyTurn ? "bg-brand-50" : ""
-                    )}>
-                      <span className="text-lg font-extrabold text-brand-600">
-                        {mySymbol}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-800">
-                        {user?.username}
-                        {isMyTurn && <span className="ml-1 animate-pulse text-brand-500">●</span>}
-                      </span>
-                    </div>
-                    <span className="text-slate-400 font-bold text-sm">VS</span>
-                    <div className={clsx(
-                      "flex items-center gap-2 px-3 py-2 rounded-xl transition",
-                      !isMyTurn ? "bg-rose-50" : ""
-                    )}>
-                      <span className="text-sm font-semibold text-slate-800">
-                        {opponentUsername || "Opponent"}
-                        {!isMyTurn && <span className="ml-1 animate-pulse text-rose-400">●</span>}
-                      </span>
-                      <span className="text-lg font-extrabold text-rose-500">
-                        {mySymbol === "X" ? "O" : "X"}
-                      </span>
-                    </div>
+              <div className="space-y-5 animate-fade-in">
+                {/* Player name header (sample style) */}
+                <div className="flex items-start justify-between px-2">
+                  <div className={clsx(
+                    "text-center transition-opacity",
+                    isMyTurn ? "opacity-100" : "opacity-40"
+                  )}>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+                      {user?.username}
+                    </p>
+                    <p className="text-slate-300 text-xs">(you)</p>
+                    <p className="text-2xl font-black text-teal-400 mt-0.5">
+                      {mySymbol}
+                    </p>
+                    {isMyTurn && <span className="text-[10px] text-teal-400 animate-pulse">▶ Turn</span>}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs text-slate-500 uppercase tracking-widest">vs</p>
+                  </div>
+                  <div className={clsx(
+                    "text-center transition-opacity",
+                    !isMyTurn ? "opacity-100" : "opacity-40"
+                  )}>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
+                      {opponentUsername || "Opponent"}
+                    </p>
+                    <p className="text-slate-300 text-xs">(opp)</p>
+                    <p className="text-2xl font-black text-rose-300 mt-0.5">
+                      {mySymbol === "X" ? "O" : "X"}
+                    </p>
+                    {!isMyTurn && <span className="text-[10px] text-rose-300 animate-pulse">▶ Turn</span>}
                   </div>
                 </div>
 
@@ -424,14 +431,6 @@ export default function HomePage() {
                     isMyTurn={isMyTurn}
                   />
                 )}
-
-                {/* Turn indicator */}
-                <p className={clsx(
-                  "text-center text-sm font-semibold",
-                  isMyTurn ? "text-brand-600" : "text-slate-400"
-                )}>
-                  {isMyTurn ? "🎯 Your move!" : `Waiting for ${opponentUsername || "opponent"}...`}
-                </p>
 
                 {/* Board */}
                 <div className="flex justify-center">
@@ -446,10 +445,15 @@ export default function HomePage() {
                   />
                 </div>
 
-                {/* Move count */}
-                <p className="text-center text-xs text-slate-400">
-                  Move {gameState.moveCount} · {gameState.mode} mode
-                </p>
+                {/* Leave button (sample style) */}
+                <div className="flex justify-center">
+                  <button
+                    onClick={resetGame}
+                    className="text-xs text-slate-500 hover:text-slate-300 transition underline underline-offset-2"
+                  >
+                    Leave room
+                  </button>
+                </div>
               </div>
             )}
 

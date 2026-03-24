@@ -1,0 +1,10 @@
+{
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  // Suppress tsconfig.json errors originating from node_modules packages
+  // (e.g. @heroiclabs/nakama-js publishes a tsconfig that extends a monorepo
+  // root path which doesn't exist when installed as a standalone package)
+  "typescript.tsserver.watchOptions": {
+    "excludeDirectories": ["**/node_modules"]
+  }
+}
