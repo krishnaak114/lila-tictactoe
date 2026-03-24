@@ -537,7 +537,7 @@ function rpcGetLeaderboard(
   payload: string
 ): string {
   try {
-    const result = nk.leaderboardRecordsList(LEADERBOARD_ID, [], 10, undefined, 1);
+    const result = nk.leaderboardRecordsList(LEADERBOARD_ID, [], 10);
 
     // Batch-read per-player stats (losses, draws, streak) in a single call
     const statsMap: Record<string, any> = {};
